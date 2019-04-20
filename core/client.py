@@ -6,7 +6,7 @@ from core.ui import Model, View
 from utils.logs import create_logger
 
 MESSAGES = {
-    'l': 'lay',
+    'l': '_lay',
     'd': 'draw',
     'k': 'knock',
     'nk': 'not knock',
@@ -125,35 +125,28 @@ class GinClient(BaseClient):
     def __init__(self, user_name='John Doe'):
         super().__init__(user_name)
         self.model = Model()
-        self.view = View()
+        self.view = View(self)
+        self.action = None
+        self.card = None
+        self.choice = None
 
     def _step_one(self):
         self._read_message()
-        # show discard or steal
         LOGGER.info('Draw or steal ?')
-        # waiting for action
-        action = input().lower()
-        score_message = self._send_message(action)
+        score_message = self._send_message(self.action)
         self.score = (re.sub('[^0-9]', '', score_message))
-        # update view
 
     def _step_two(self):
-        # show which card to lay down
         LOGGER.info('Which card to lay down ?')
-        # waiting for action
-        card = input()
-        score_message = self._send_message('l {}'.format(card))
+        score_message = self._send_message('l {}'.format(self.card))
         self.score = (re.sub('[^0-9]', '', score_message))
 
     def _step_three(self):
         LOGGER.info('Would you like to knock ?')
-        # waiting for action
-        choice = input()
-        score_message = self._send_message(choice)
+        score_message = self._send_message(self.choice)
         self.score = (re.sub('[^0-9]', '', score_message))
         print(self.score)
 
     def _update_cards(self):
         cards_as_string = self._read_message()
         self.cards = cards_as_string.split('|')[1].strip().split(' ')
-        # update view

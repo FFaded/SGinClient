@@ -2,16 +2,6 @@ import tkinter as tk
 
 from PIL import Image, ImageTk
 
-ONE = 1
-TWO = 2
-THREE = 3
-
-STEPS = {
-    'ONE': ONE,
-    'TWO': TWO,
-    'THREE': THREE
-}
-
 
 class Model:
     def __init__(self):
@@ -22,18 +12,20 @@ class Model:
 
 
 class View:
-    def __init__(self, card_width=50, card_height=73):
+
+    MAX_AMOUNT_OF_CARDS = 11
+
+    def __init__(self, client, card_width=50, card_height=73):
+        self.client = client
         self.hand = []
         self._model = None
-        self.root = tk.Tk()
-        self.root.title('Gin Client')
         self._card_width = card_width
         self._card_height = card_height
-        self._is_drawing_mode = False
-        self._is_erasing_mode = False
         self._card_images = [None] * 10
-        self.discarded_card = None
-        self._step = STEPS['ONE']
+        self._card_to_discard = None
+        self._selected_card = None
+        self.root = tk.Tk()
+        self.root.title('Gin Client')
         self._init_view()
         self.update_hand(['Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks'])
         self.update_discarded_card('As')
@@ -45,10 +37,34 @@ class View:
         self.root.protocol("WM_DELETE_WINDOW", self.stop)
         self.root.mainloop()
 
-    def discard(self, event):
+    def _select_card(self, event):
+        if self._card_to_discard is self.hand[event.widget.index]:
+            self._card_to_discard.configure(bg='gray94')
+            self._card_to_discard = None
+        else:
+            if self.hand[event.widget.index].image:
+                self._card_to_discard = self.hand[event.widget.index]
+                for card in self.hand:
+                    if card is self._card_to_discard:
+                        self._card_to_discard.configure(bg='blue')
+                    else:
+                        card.configure(bg='gray94')
+
+    def lay(self):
+        if self._card_to_discard:
+            self.discarded_card_label.image = self._card_to_discard.image
+            self.discarded_card_label.configure(image=self.discarded_card_label.image)
+            self._card_to_discard.configure(image='')
+            self._card_to_discard.configure(bg='gray94')
+            self._card_to_discard.image = None
+            self._card_to_discard = None
+
+    def draw(self):
         pass
 
-    # internal methods
+    def steal(self):
+        pass
+
     def _init_view(self):
         # frames
         self.main_frame = tk.Frame(self.root, height=73)
@@ -57,24 +73,25 @@ class View:
         self.buttons_frame = tk.Frame(self.menu_frame, bg='white')
 
         # menu
-        self.play_and_pause = tk.StringVar()
-        self.play_and_pause.set('Pause')
-        self.reset_button = tk.Button(self.buttons_frame, text='Reset', command=None)
-        self.play_button = tk.Button(self.buttons_frame, textvariable=self.play_and_pause, command=None)
+        self.drawing_button = tk.Button(self.buttons_frame, text='Draw', command=self.draw)
+        self.stealing_button = tk.Button(self.buttons_frame, text='Steal', command=self.steal)
+        self.laying_button = tk.Button(self.buttons_frame, text='Lay card', command=self.lay)
 
         # display
         self.menu_frame.pack(fill=tk.X)
         self.separator_frame.pack(fill=tk.X, pady=10)
-        self.main_frame.pack()
+        self.main_frame.pack(expand=0)
         self.buttons_frame.pack(side=tk.TOP)
+        self.laying_button.pack(side=tk.LEFT, padx=5)
+        self.drawing_button.pack(side=tk.LEFT, padx=5)
+        self.stealing_button.pack(side=tk.LEFT, padx=5)
 
         # game area
-        for i in range(10):
-            card_label = tk.Label(self.main_frame,
-                                  width=self._card_width,
-                                  height=self._card_height)
+        for i in range(self.MAX_AMOUNT_OF_CARDS):
+            card_label = tk.Label(self.main_frame)
             card_label.pack(side=tk.LEFT, padx=3)
-            card_label.bind("<Button-1>", self.discard)
+            card_label.bind("<Button-1>", self._select_card)
+            card_label.index = i
             self.hand.append(card_label)
 
         img = ImageTk.PhotoImage(Image.open('assets/img/back.png'))
@@ -93,17 +110,19 @@ class View:
         vseparator = tk.Canvas(self.main_frame,
                                width=100,
                                height=self._card_height)
+
         vseparator.pack(side=tk.RIGHT)
 
     def update_hand(self, model):
-        for i, card in enumerate(model):
-            img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(card)))
+        for i in range(self.MAX_AMOUNT_OF_CARDS):
+            if i < len(model):
+                img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(model[i])))
+            else:
+                img = ''
             self.hand[i].image = img
             self.hand[i].configure(image=img)
 
     def update_discarded_card(self, card):
-        self.discarded_card = card
         img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(card)))
         self.discarded_card_label.image = img
         self.discarded_card_label.configure(image=img)
-

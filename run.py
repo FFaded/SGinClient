@@ -1,4 +1,9 @@
-from comm.client import GinClient
+from core.client import CommandGinClient
+from core.ui import View
+a = CommandGinClient()
 
-a = GinClient()
+b = View(a)
+b.start()
+
+a = CommandGinClient()
 a.start_game()
