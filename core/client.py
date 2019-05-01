@@ -1,8 +1,11 @@
 import re
 import socket
+import threading
+import time
 
 from config import CONFIG
-from core.ui import Model, View
+from core.model import Model
+from core.ui import View
 from utils.logs import create_logger
 
 MESSAGES = {
@@ -29,9 +32,9 @@ class BaseClient:
     def __init__(self, user_name='John Doe'):
         self.user_name = user_name
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.cards = None
+        self.starting_situation = None
 
-    def start_game(self):
+    def init_game(self):
         response = self._send_message('h')
         if response != 'ack':
             raise ProtocolError('Expected "ack"')
@@ -40,8 +43,9 @@ class BaseClient:
             role = self._read_message()
 
         if role != 'first':
-            self._read_message()
+            self.starting_situation = self._read_message()
 
+    def start_game(self):
         while True:
             self.play_round()
             self._read_message()
@@ -88,6 +92,7 @@ class BaseClient:
 class CommandGinClient(BaseClient):
     def __init__(self, user_name='John Doe'):
         super().__init__(user_name)
+        self.cards = None
 
     def _step_one(self):
         self._read_message()
@@ -118,10 +123,14 @@ class CommandGinClient(BaseClient):
 
     def _update_cards(self):
         cards_as_string = self._read_message()
-        self.cards = cards_as_string.split('|')[1].strip().split(' ')
+        self.cards = cards_as_string.split('|')[1].strip().split(',')
 
 
 class GinClient(BaseClient):
+    DRAWING = 0
+    LAYING = 1
+    KNOCKING = 2
+
     def __init__(self, user_name='John Doe'):
         super().__init__(user_name)
         self.model = Model()
@@ -129,24 +138,65 @@ class GinClient(BaseClient):
         self.action = None
         self.card = None
         self.choice = None
+        self.state = None
+
+    def init_game(self):
+        super(GinClient, self).init_game()
+        if self.starting_situation:
+            self._parse_hand(self.starting_situation)
+            self.view.update(self.model)
 
     def _step_one(self):
-        self._read_message()
+        self._parse_hand(self._read_message())
+        self.view.model = self.model
+        self.view.update(self.model)
         LOGGER.info('Draw or steal ?')
+        self.state = self.DRAWING
+        while not self.action:
+            time.sleep(1)
+
         score_message = self._send_message(self.action)
+        self.action = None
         self.score = (re.sub('[^0-9]', '', score_message))
+        self.state = self.LAYING
+        print(self.model.discarded_card)
+        print(self.model.hand)
 
     def _step_two(self):
         LOGGER.info('Which card to lay down ?')
+        while not self.card:
+            time.sleep(1)
+
         score_message = self._send_message('l {}'.format(self.card))
+        self.card = None
         self.score = (re.sub('[^0-9]', '', score_message))
+        self.state = self.KNOCKING
 
     def _step_three(self):
         LOGGER.info('Would you like to knock ?')
+        while not self.choice:
+            time.sleep(1)
+
         score_message = self._send_message(self.choice)
+        self.choice = None
         self.score = (re.sub('[^0-9]', '', score_message))
-        print(self.score)
+        self.state = self.DRAWING
 
     def _update_cards(self):
-        cards_as_string = self._read_message()
-        self.cards = cards_as_string.split('|')[1].strip().split(' ')
+        self._parse_hand(self._read_message())
+        self.view.update(self.model)
+
+    def _parse_hand(self, msg):
+        self.model.discarded_card, hand = msg.replace(' ', '').split('|')
+        self.model.hand = hand.split(',')
+
+
+class MainThread(threading.Thread):
+    def __init__(self, client):
+        threading.Thread.__init__(self)
+        self.client = client
+
+    def run(self):
+        self.client.init_game()
+        self.client.start_game()
+

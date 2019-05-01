@@ -3,14 +3,6 @@ import tkinter as tk
 from PIL import Image, ImageTk
 
 
-class Model:
-    def __init__(self):
-        self.cards = None
-
-    def update(self, cards):
-        self.cards = cards
-
-
 class View:
 
     MAX_AMOUNT_OF_CARDS = 11
@@ -18,7 +10,7 @@ class View:
     def __init__(self, client, card_width=50, card_height=73):
         self.client = client
         self.hand = []
-        self._model = None
+        self.model = None
         self._card_width = card_width
         self._card_height = card_height
         self._card_images = [None] * 10
@@ -27,8 +19,6 @@ class View:
         self.root = tk.Tk()
         self.root.title('Gin Client')
         self._init_view()
-        self.update_hand(['Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks', 'Ah', 'Ks'])
-        self.update_discarded_card('As')
 
     def stop(self):
         self.root.destroy()
@@ -37,33 +27,32 @@ class View:
         self.root.protocol("WM_DELETE_WINDOW", self.stop)
         self.root.mainloop()
 
-    def _select_card(self, event):
-        if self._card_to_discard is self.hand[event.widget.index]:
-            self._card_to_discard.configure(bg='gray94')
-            self._card_to_discard = None
+    def update(self, model):
+        self._update_hand(model.hand)
+        self._update_discarded_card(model.discarded_card)
+        self._update_score(model.score)
+
+    def _update_hand(self, hand):
+        for i in range(self.MAX_AMOUNT_OF_CARDS):
+            if i < len(hand):
+                self.hand[i].name = hand[i]
+                img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(hand[i])))
+            else:
+                img = ''
+            self.hand[i].image = img
+            self.hand[i].configure(image=img)
+
+    def _update_discarded_card(self, card):
+        if card:
+            self.discarded_card_label.name = card
+            img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(card)))
         else:
-            if self.hand[event.widget.index].image:
-                self._card_to_discard = self.hand[event.widget.index]
-                for card in self.hand:
-                    if card is self._card_to_discard:
-                        self._card_to_discard.configure(bg='blue')
-                    else:
-                        card.configure(bg='gray94')
+            img = ''
+        self.discarded_card_label.image = img
+        self.discarded_card_label.configure(image=img)
 
-    def lay(self):
-        if self._card_to_discard:
-            self.discarded_card_label.image = self._card_to_discard.image
-            self.discarded_card_label.configure(image=self.discarded_card_label.image)
-            self._card_to_discard.configure(image='')
-            self._card_to_discard.configure(bg='gray94')
-            self._card_to_discard.image = None
-            self._card_to_discard = None
-
-    def draw(self):
-        pass
-
-    def steal(self):
-        pass
+    def _update_score(self, score):
+        self.score = score
 
     def _init_view(self):
         # frames
@@ -73,9 +62,11 @@ class View:
         self.buttons_frame = tk.Frame(self.menu_frame, bg='white')
 
         # menu
-        self.drawing_button = tk.Button(self.buttons_frame, text='Draw', command=self.draw)
-        self.stealing_button = tk.Button(self.buttons_frame, text='Steal', command=self.steal)
-        self.laying_button = tk.Button(self.buttons_frame, text='Lay card', command=self.lay)
+        self.drawing_button = tk.Button(self.buttons_frame, text='Draw', command=self._draw)
+        self.stealing_button = tk.Button(self.buttons_frame, text='Steal', command=self._steal)
+        self.laying_button = tk.Button(self.buttons_frame, text='Lay card', command=self._lay)
+        self.knocking_button = tk.Button(self.buttons_frame, text='Knock', command=self._knock)
+        self.passing_button = tk.Button(self.buttons_frame, text='Pass', command=self._do_not_knock)
 
         # display
         self.menu_frame.pack(fill=tk.X)
@@ -85,6 +76,8 @@ class View:
         self.laying_button.pack(side=tk.LEFT, padx=5)
         self.drawing_button.pack(side=tk.LEFT, padx=5)
         self.stealing_button.pack(side=tk.LEFT, padx=5)
+        self.passing_button.pack(side=tk.RIGHT, padx=5)
+        self.knocking_button.pack(side=tk.RIGHT, padx=5)
 
         # game area
         for i in range(self.MAX_AMOUNT_OF_CARDS):
@@ -113,16 +106,50 @@ class View:
 
         vseparator.pack(side=tk.RIGHT)
 
-    def update_hand(self, model):
-        for i in range(self.MAX_AMOUNT_OF_CARDS):
-            if i < len(model):
-                img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(model[i])))
-            else:
-                img = ''
-            self.hand[i].image = img
-            self.hand[i].configure(image=img)
+    def _lay(self):
+        print(self.client.state)
+        if self.client.state is self.client.LAYING and self._card_to_discard:
+            self.discarded_card_label.image = self._card_to_discard.image
+            self.discarded_card_label.configure(image=self.discarded_card_label.image)
+            self.discarded_card_label.name = self._card_to_discard.name
+            self._card_to_discard.configure(image='')
+            self._card_to_discard.configure(bg='gray94')
+            self.client.card = self._card_to_discard.name
+            self._card_to_discard.image = None
+            self._card_to_discard = None
+            self.client.state = self.client.KNOCKING
 
-    def update_discarded_card(self, card):
-        img = ImageTk.PhotoImage(Image.open('assets/img/{}.png'.format(card)))
-        self.discarded_card_label.image = img
-        self.discarded_card_label.configure(image=img)
+    def _draw(self):
+        print(self.client.state)
+        if self.client.state is self.client.DRAWING:
+            self.client.state = self.client.LAYING
+            self.client.action = 'd'
+
+    def _steal(self):
+        if self.client.state is self.client.DRAWING:
+            self.client.state = self.client.LAYING
+            self.hand.append(self.discarded_card_label.name)
+            self.client.action = 's'
+
+    def _knock(self):
+        if self.client.state is self.client.KNOCKING:
+            self.client.state = None
+            self.client.choice = 'k'
+
+    def _do_not_knock(self):
+        if self.client.state is self.client.KNOCKING:
+            self.client.state = None
+            self.client.choice = 'nk'
+
+    def _select_card(self, event):
+        if self._card_to_discard is self.hand[event.widget.index]:
+            self._card_to_discard.configure(bg='gray94')
+            self._card_to_discard = None
+        else:
+            if self.hand[event.widget.index].image:
+                self._card_to_discard = self.hand[event.widget.index]
+                for card in self.hand:
+                    if card is self._card_to_discard:
+                        self._card_to_discard.configure(bg='blue')
+                    else:
+                        self._card_to_discard.configure(bg='gray94')

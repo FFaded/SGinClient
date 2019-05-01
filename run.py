@@ -1,9 +1,12 @@
 from core.client import CommandGinClient
-from core.ui import View
-a = CommandGinClient()
 
-b = View(a)
-b.start()
+# client = GinClient()
+# main = MainThread(client)
+# main.start()
+#
+# client.view.start()
+#
 
-a = CommandGinClient()
-a.start_game()
+client = CommandGinClient()
+client.init_game()
+client.start_game()
