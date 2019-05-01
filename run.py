@@ -1,12 +1,11 @@
-from core.client import CommandGinClient
+from core.client import MainThread
 
-# client = GinClient()
-# main = MainThread(client)
-# main.start()
-#
-# client.view.start()
-#
+main = MainThread()
+main.start()
 
-client = CommandGinClient()
-client.init_game()
-client.start_game()
+main.client.view.start()
+
+#
+# client = CommandGinClient()
+# client.init_game()
+# client.start_game()

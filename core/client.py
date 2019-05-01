@@ -150,6 +150,7 @@ class GinClient(BaseClient):
         self._parse_hand(self._read_message())
         self.view.model = self.model
         self.view.update(self.model)
+        self.view.your_turn()
         LOGGER.info('Draw or steal ?')
         self.state = self.DRAWING
         while not self.action:
@@ -180,7 +181,8 @@ class GinClient(BaseClient):
         score_message = self._send_message(self.choice)
         self.choice = None
         self.score = (re.sub('[^0-9]', '', score_message))
-        self.state = self.DRAWING
+        self.state = None
+        self.view.your_turn()
 
     def _update_cards(self):
         self._parse_hand(self._read_message())
@@ -192,9 +194,9 @@ class GinClient(BaseClient):
 
 
 class MainThread(threading.Thread):
-    def __init__(self, client):
+    def __init__(self):
         threading.Thread.__init__(self)
-        self.client = client
+        self.client = GinClient()
 
     def run(self):
         self.client.init_game()
